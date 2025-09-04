@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario Centralizado</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f0f2f5; padding:20px; }
+h1, h2 { text-align:center; color:#333; }
+.container { max-width:900px; margin:0 auto; background:#fff; padding:25px; box-shadow:0 5px 15px rgba(0,0,0,0.1); border-radius:10px; margin-bottom:40px; }
+input, select { padding:10px; margin:10px 0; border:1px solid #ccc; border-radius:5px; width:100%; transition:0.3s; }
+button { padding:10px 15px; margin:3px; border:none; border-radius:5px; cursor:pointer; }
+button:hover { opacity:0.9; }
+.btn-edit { background:#f0ad4e; color:white; }
+.btn-delete { background:#d9534f; color:white; }
+.btn-save { background:#4CAF50; color:white; }
+table { width:100%; margin-top:15px; border-collapse:collapse; display:none; }
+table, th, td { border:1px solid #ddd; }
+th, td { padding:12px; text-align:left; }
+th { background:#f7f7f7; color:#333; }
+tr:nth-child(even) { background:#f9f9f9; }
+.summary { margin:10px 0; font-weight:bold; color:#333; }
+</style>
+</head>
+<body>
+
+<h1>Inventario Centralizado</h1>
+
+<div class="container">
+<h2>Agregar / Modificar Equipo</h2>
+<form id="formEquipo">
+<select id="tipo" required>
+<option value="">Seleccionar Tipo de Equipo</option>
+<option value="Impresora">Impresora</option>
+<option value="Fotocopiadora">Fotocopiadora</option>
+<option value="Computador">Computador</option>
+</select>
+<input type="text" id="marca" placeholder="Marca" required>
+<input type="text" id="modelo" placeholder="Modelo" required>
+<input type="text" id="serial" placeholder="Número de Serie" required>
+<input type="text" id="codigoLPN" placeholder="Código LPN Interno" required>
+<input type="text" id="ubicacion" placeholder="Ubicación" required>
+<input type="text" id="observacion" placeholder="Observación">
+<button type="submit" class="btn-save">Guardar Equipo</button>
+</form>
+</div>
+
+<div class="container" id="contenedorInventarios"></div>
+
+<script>
+// --- Variables globales ---
+const storageKeys = { 
+  Impresora: "inventarioImpresoras", 
+  Fotocopiadora: "inventarioFotocopiadoras", 
+  Computador: "inventarioComputadores" 
+};
+
+const tipos = ["Impresora","Fotocopiadora","Computador"];
+
+let equipos = {
+  Impresora: JSON.parse(localStorage.getItem(storageKeys.Impresora)) || [],
+  Fotocopiadora: JSON.parse(localStorage.getItem(storageKeys.Fotocopiadora)) || [],
+  Computador: JSON.parse(localStorage.getItem(storageKeys.Computador)) || []
+};
+
+let editIndex = { Impresora:null, Fotocopiadora:null, Computador:null };
+
+// --- Función para renderizar todas las tablas ---
+function renderTablas(){
+  const contenedor = document.getElementById("contenedorInventarios");
+  contenedor.innerHTML = "";
+  tipos.forEach(tipo => {
+    let div = document.createElement("div");
+    div.className = "container";
+    div.innerHTML = `
+      <h2>Inventario de ${tipo}s</h2>
+      <div class="summary">Total de ${tipo.toLowerCase()}s: <span id="summary${tipo}">0</span></div>
+      <button onclick="toggleTable('${tipo}')">Mostrar / Ocultar Lista</button>
+      <button onclick="downloadExcel('${tipo}')">Descargar Excel</button>
+      <table id="table${tipo}">
+        <thead>
+          <tr>
+            <th>Marca</th><th>Modelo</th><th>Serie</th><th>LPN</th><th>Ubicación</th><th>Observación</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    `;
+    contenedor.appendChild(div);
+    renderTabla(tipo);
+  });
+}
+
+// --- Función render individual ---
+function renderTabla(tipo){
+  const tbody = document.querySelector(`#table${tipo} tbody`);
+  tbody.innerHTML = "";
+  equipos[tipo].forEach((eq,index)=>{
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${eq.marca}</td>
+      <td>${eq.modelo}</td>
+      <td>${eq.serial}</td>
+      <td>${eq.codigoLPN}</td>
+      <td>${eq.ubicacion}</td>
+      <td>${eq.observacion||""}</td>
+      <td>
+        <button class="btn-edit" onclick="editarEquipo('${tipo}',${index})">Modificar</button>
+        <button class="btn-delete" onclick="bajaEquipo('${tipo}',${index})">Dar de baja</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+  document.getElementById(`summary${tipo}`).innerText = equipos[tipo].length;
+  document.getElementById(`table${tipo}`).style.display = equipos[tipo].length>0 ? "table" : "none";
+}
+
+// --- Guardar / Modificar ---
+document.getElementById("formEquipo").addEventListener("submit", function(e){
+  e.preventDefault();
+  const tipo = document.getElementById("tipo").value;
+  if(!tipo) return alert("Seleccione un tipo de equipo");
+
+  const equipo = {
+    marca: document.getElementById("marca").value,
+    modelo: document.getElementById("modelo").value,
+    serial: document.getElementById("serial").value,
+    codigoLPN: document.getElementById("codigoLPN").value,
+    ubicacion: document.getElementById("ubicacion").value,
+    observacion: document.getElementById("observacion").value
+  };
+
+  if(editIndex[tipo] !== null){
+    equipos[tipo][editIndex[tipo]] = equipo;
+    editIndex[tipo] = null;
+  } else {
+    equipos[tipo].push(equipo);
+  }
+
+  localStorage.setItem(storageKeys[tipo], JSON.stringify(equipos[tipo]));
+  renderTabla(tipo);
+  document.getElementById("formEquipo").reset();
+});
+
+// --- Editar ---
+function editarEquipo(tipo,index){
+  const eq = equipos[tipo][index];
+  document.getElementById("tipo").value = tipo;
+  document.getElementById("marca").value = eq.marca;
+  document.getElementById("modelo").value = eq.modelo;
+  document.getElementById("serial").value = eq.serial;
+  document.getElementById("codigoLPN").value = eq.codigoLPN;
+  document.getElementById("ubicacion").value = eq.ubicacion;
+  document.getElementById("observacion").value = eq.observacion||"";
+  editIndex[tipo] = index;
+  document.getElementById(`table${tipo}`).style.display = "table";
+}
+
+// --- Dar de baja ---
+function bajaEquipo(tipo,index){
+  if(confirm("¿Desea dar de baja este equipo?")){
+    equipos[tipo].splice(index,1);
+    localStorage.setItem(storageKeys[tipo], JSON.stringify(equipos[tipo]));
+    renderTabla(tipo);
+  }
+}
+
+// --- Mostrar / Ocultar ---
+function toggleTable(tipo){
+  const table=document.getElementById(`table${tipo}`);
+  table.style.display = (table.style.display==="none"||table.style.display==="") ? "table" : "none";
+}
+
+// --- Descargar Excel ---
+function downloadExcel(tipo){
+  let csv="Marca,Modelo,Serie,LPN,Ubicación,Observación\n";
+  equipos[tipo].forEach(eq=>{
+    csv+=`${eq.marca},${eq.modelo},${eq.serial},${eq.codigoLPN},${eq.ubicacion},${eq.observacion||""}\n`;
+  });
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=`inventario_${tipo.toLowerCase()}.csv`;
+  link.click();
+}
+
+// --- Inicializar ---
+renderTablas();
+</script>
+
+</body>
+</html>
